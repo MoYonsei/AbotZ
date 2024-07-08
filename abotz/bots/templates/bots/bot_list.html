@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+
+    <h1>Bot List</h1>
+    <ul>
+        {% for bot in bots %}
+            <li>{{ bot.name }}: {{ bot.description }}</li>
+        {% endfor %}
+    </ul>
+
+
+{% endblock %}

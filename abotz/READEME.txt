@@ -1,0 +1,101 @@
+Project Overview
+This project is a Django-based web application designed to handle user authentication, bot management, and other functionalities. The application is structured with multiple Django apps, including user_accounts for user management and bots for managing bot-related activities.
+
+Current Issue
+Problem Description
+We are currently facing an issue with the NoReverseMatch error in the LoginView of the user_accounts application. The error message indicates that the reverse URL for bots:bots_list could not be found. This typically means that the URL pattern bots_list is not registered correctly in the urls.py files, or there might be a mismatch in the namespace or URL name.
+
+Error Message
+sql
+Copy code
+NoReverseMatch at /u/login
+Reverse for 'bots:bots_list' not found. 'bots_list' is not a valid view function or pattern name.
+Files Involved
+user_accounts/urls.py
+
+python
+Copy code
+from django.urls import path
+from .views import RegisterView, LoginView, LogoutView
+
+app_name = 'user_accounts'
+
+urlpatterns = [
+    path('register/', RegisterView.as_view(), name='register'),
+    path('login/', LoginView.as_view(), name='login'),
+    path('logout/', LogoutView.as_view(), name='logout'),
+]
+user_accounts/views.py
+
+python
+Copy code
+from django.urls import reverse_lazy
+from django.contrib import messages, auth
+from django.http import HttpResponseRedirect
+from django.shortcuts import render, redirect
+from django.views.generic import CreateView, FormView, RedirectView
+from .forms import UserRegistrationForm, UserLoginForm
+from .models import CustomUser
+
+class LoginView(FormView):
+    form_class = UserLoginForm
+    template_name = 'user_accounts/login.html'
+    success_url = reverse_lazy('bots:bots_list')  # This is where the error occurs
+
+    extra_context = {
+        'title': 'Login'
+    }
+
+    def dispatch(self, request, *args, **kwargs):
+        if self.request.user.is_authenticated:
+            return HttpResponseRedirect(self.get_success_url())
+        return super().dispatch(self.request, *args, **kwargs)
+
+    def get_form_class(self):
+        return self.form_class
+
+    def get_success_url(self):
+        return reverse_lazy('bots:bots_list')
+
+    def form_valid(self, form):
+        auth.login(self.request, form.get_user())
+        return HttpResponseRedirect(self.get_success_url())
+
+    def form_invalid(self, form):
+        return self.render_to_response(self.get_context_data(form=form))
+bots/urls.py
+
+python
+Copy code
+from django.urls import path
+from .views import BotsListView
+
+app_name = 'bots'
+
+urlpatterns = [
+    path('list/', BotsListView.as_view(), name='bots_list'),
+]
+bots/views.py
+
+python
+Copy code
+from django.views.generic import ListView
+from .models import Bot
+
+class BotsListView(ListView):
+    model = Bot
+    template_name = 'bots/bots_list.html'
+    context_object_name = 'bots'
+Main Project urls.py
+
+python
+Copy code
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('user_accounts/', include('user_accounts.urls')),
+    path('bots/', include('bots.urls')),
+    path('', include('home.urls')),
+]
