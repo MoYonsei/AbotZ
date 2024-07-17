@@ -5,8 +5,6 @@ from .views import RegisterView, LoginView, LogoutView
 
 app_name = 'user_accounts'
 
-app_name = 'bots'
-
 
 
 urlpatterns = [

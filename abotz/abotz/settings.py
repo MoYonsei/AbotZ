@@ -9,8 +9,9 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
-
+from django.middleware.security import SecurityMiddleware
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,9 @@ SECRET_KEY = 'django-insecure-8k1eev7@epo47z@003lv$p@a(_4#m5pl!q45w1pii#gm*+s^i5
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'yourdomain.com', '10.0.2.2']
+
+
 
 
 
@@ -42,12 +45,17 @@ INSTALLED_APPS = [
     'user_accounts.apps.UserAccountsConfig',
     'bots.apps.BotsConfig',
     'crispy_forms',
+    'rest_framework',
+    'corsheaders',
+    'csp',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'csp.middleware.CSPMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -120,6 +128,21 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Set the default language code
+LANGUAGE_CODE = 'en'
+
+# Define the available languages
+LANGUAGES = [
+    ('en', 'English'),
+    ('ar', 'Arabic'),
+    # Add other languages here
+]
+
+# Set the path for translation files
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, 'locale'),
+]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
@@ -151,3 +174,22 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'user_accounts.CustomUser'
 
 LOGIN_URL = '/user_accounts/login'
+LOGIN_REDIRECT_URL = '/bots/bots_list'
+
+
+CORS_ORIGIN_ALLOW_ALL = False
+CORS_ORIGIN_WHITELIST = [
+    'http://127.0.0.1:5555',
+    'http://10.0.2.2:5555'
+]
+CSP_DEFAULT_SRC = ["'self'"]
+CSP_STYLE_SRC = ["'self'", "'unsafe-inline'"]
+CSP_IMG_SRC = ["'self'", 'data:']
+CSP_SCRIPT_SRC = ["'self'", "'unsafe-inline'"]
+CSP_FRAME_SRC = ["'self'", 'http://127.0.0.1:5555', 'http://10.0.2.2:5555']
+CSP_FRAME_ANCESTORS = ["'self'", 'http://127.0.0.1:5555', 'http://10.0.2.2:5555']
+
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'ALLOW-FROM http://127.0.0.1:5555'
+
+

@@ -4,12 +4,94 @@
 
 {% block content %}
 
-    <h1>Bot List</h1>
-    <ul>
-        {% for bot in bots %}
-            <li>{{ bot.name }}: {{ bot.description }}</li>
-        {% endfor %}
-    </ul>
+<div class="container mt-4">
+    <h2>My Bots</h2>
+    <a href="{% url 'bots:create_bot' %}" class="btn btn-primary mb-3">Create Bot<i class="fa-solid fa-plus"></i></a>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Start Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bot in bots %}
+            <tr id="bot-{{ bot.id }}">
+                <td><i class="fa-solid fa-robot"></i></td>
+                <td>{{ bot.name }}</td>
+                <td>{{ bot.description }}</td>
+                <td>{{ bot.created_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <a href="{% url 'bots:update_bot' bot.id %}" class="btn btn-warning btn-sm">Edit<i class="fa-solid fa-pen-to-square"></i></a>
+                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal" data-bot-id="{{ bot.id }}" data-bot-name="{{ bot.name }}">Delete<i class="fa-solid fa-pen-to-square"></i></button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4"><i class="fa-solid fa-face-frown">No Bots Found.</i></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    
+</script>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete <strong id="botName"></strong>?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel <i class="fa-solid fa-ban"></i></button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete <i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
 
 
+<script>
+    $(document).ready(function() {
+        var botId;
+
+        $('#deleteModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget); // Button that triggered the modal
+            botId = button.data('bot-id'); // Extract info from data-* attributes
+            var botName = button.data('bot-name'); // Extract info from data-* attributes
+
+            var modal = $(this);
+            modal.find('#botName').text(botName);
+        });
+
+        $('#confirmDeleteBtn').click(function() {
+            $.ajax({
+                url: '/delete_bot/' + botId + '/',
+                type: 'DELETE',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                success: function(result) {
+                    $('#deleteModal').modal('hide');
+                    $('#bot-' + botId).remove();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error deleting bot:', error);
+                }
+            });
+        });
+    });
+    
+</script>
 {% endblock %}

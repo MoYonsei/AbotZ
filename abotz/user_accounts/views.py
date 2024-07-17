@@ -11,7 +11,7 @@ class RegisterView(CreateView):
     model = CustomUser
     form_class = UserRegistrationForm
     template_name = 'user_accounts/register.html'
-    success_url = '/'
+    success_url = reverse_lazy('user_accounts:login')  # تعديل URL النجاح
 
     extra_context = {
         'title': 'Register'
@@ -38,7 +38,7 @@ class RegisterView(CreateView):
             user.set_password(password)
             user.save()
             messages.success(request, 'Successfully registered')
-            return redirect('bots:bots_list')
+            return redirect('user_accounts:login')  # إعادة التوجيه لصفحة تسجيل الدخول بعد التسجيل
         else:
             print(user_form.errors)
             return render(request, 'user_accounts/register.html', {'form': user_form})
@@ -65,13 +65,15 @@ class LoginView(FormView):
 
     def form_valid(self, form):
         auth.login(self.request, form.get_user())
+        messages.success(self.request, 'You have been logged in successfully.')
         return HttpResponseRedirect(self.get_success_url())
 
     def form_invalid(self, form):
+        messages.error(self.request, 'Invalid login credentials. Please try again.')
         return self.render_to_response(self.get_context_data(form=form))
 
 class LogoutView(RedirectView):
-    url = reverse_lazy('home')
+    url = reverse_lazy('user_accounts:login')
 
     def get(self, request, *args, **kwargs):
         auth.logout(request)

@@ -1,7 +1,6 @@
 from django.contrib import admin
-
-# Register your models here.
 from .models import Bot
 
-admin.site.register(Bot)
-
+@admin.register(Bot)
+class BotAdmin(admin.ModelAdmin):
+    list_display = ['name', 'owner', 'description']

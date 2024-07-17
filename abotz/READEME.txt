@@ -1,101 +1,173 @@
-Project Overview
-This project is a Django-based web application designed to handle user authentication, bot management, and other functionalities. The application is structured with multiple Django apps, including user_accounts for user management and bots for managing bot-related activities.
+Address:
+Problem connecting to BlueStacks from the Django project using ADB
 
-Current Issue
-Problem Description
-We are currently facing an issue with the NoReverseMatch error in the LoginView of the user_accounts application. The error message indicates that the reverse URL for bots:bots_list could not be found. This typically means that the URL pattern bots_list is not registered correctly in the urls.py files, or there might be a mismatch in the namespace or URL name.
+Description:
+I am working on a Django project that includes a login and account creation system. After logging in or creating a new account, users are redirected to a page called list_bots. From there, users can create a new bot that is saved to the database. I need to run the Android emulator for each bot and set it up so that the user can interact with the emulator directly through the Web page.
 
-Error Message
-sql
-Copy code
-NoReverseMatch at /u/login
-Reverse for 'bots:bots_list' not found. 'bots_list' is not a valid view function or pattern name.
-Files Involved
-user_accounts/urls.py
 
-python
-Copy code
-from django.urls import path
-from .views import RegisterView, LoginView, LogoutView
+1. Creating a Django project:
 
-app_name = 'user_accounts'
+2. Preparation of forms (models.py):
 
-urlpatterns = [
-    path('register/', RegisterView.as_view(), name='register'),
-    path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
-]
-user_accounts/views.py
+from django.db import models
+from django.conf import settings
+from .bluestacks_control import create_emulator
+# Create your models here.
 
-python
-Copy code
-from django.urls import reverse_lazy
-from django.contrib import messages, auth
-from django.http import HttpResponseRedirect
-from django.shortcuts import render, redirect
-from django.views.generic import CreateView, FormView, RedirectView
-from .forms import UserRegistrationForm, UserLoginForm
-from .models import CustomUser
+class Bot(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bots')
+    name = models.CharField(max_length=100)
+    description = models.TextField(max_length=100)
+    emulator_id = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-class LoginView(FormView):
-    form_class = UserLoginForm
-    template_name = 'user_accounts/login.html'
-    success_url = reverse_lazy('bots:bots_list')  # This is where the error occurs
+    def __str__(self):
+        return self.name
 
-    extra_context = {
-        'title': 'Login'
-    }
+    def save(self, *args, **kwargs):
+        if not self.emulator_id:
+            self.emulator_id = create_emulator() 
+        super().save(*args, **kwargs)
 
-    def dispatch(self, request, *args, **kwargs):
-        if self.request.user.is_authenticated:
-            return HttpResponseRedirect(self.get_success_url())
-        return super().dispatch(self.request, *args, **kwargs)
 
-    def get_form_class(self):
-        return self.form_class
+3. Preparation of presentations (views.py):
 
-    def get_success_url(self):
-        return reverse_lazy('bots:bots_list')
+# bots/views.py
+from django.views.generic.edit import CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import ListView, DetailView
+from django.urls import reverse_lazy, reverse
+from .models import Bot, BotAction
+from django.conf import settings
+from .forms import BotForm, BotActionForm
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .serializers import BotActionSerializer
+from django.shortcuts import render, get_object_or_404, redirect
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from .bluestacks_control import install_app, launch_app, stop_app
 
-    def form_valid(self, form):
-        auth.login(self.request, form.get_user())
-        return HttpResponseRedirect(self.get_success_url())
 
-    def form_invalid(self, form):
-        return self.render_to_response(self.get_context_data(form=form))
-bots/urls.py
 
-python
-Copy code
-from django.urls import path
-from .views import BotsListView
-
-app_name = 'bots'
-
-urlpatterns = [
-    path('list/', BotsListView.as_view(), name='bots_list'),
-]
-bots/views.py
-
-python
-Copy code
-from django.views.generic import ListView
-from .models import Bot
-
-class BotsListView(ListView):
+class BotsListView(LoginRequiredMixin, ListView):
     model = Bot
     template_name = 'bots/bots_list.html'
     context_object_name = 'bots'
-Main Project urls.py
+    login_url = reverse_lazy('user_accounts:login')  
+    redirect_field_name = 'bots/bots_list' 
 
-python
-Copy code
-from django.contrib import admin
-from django.urls import path, include
+    def get_queryset(self):
+        return Bot.objects.filter(owner=self.request.user)
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('user_accounts/', include('user_accounts.urls')),
-    path('bots/', include('bots.urls')),
-    path('', include('home.urls')),
+
+class CreateBotView(LoginRequiredMixin, CreateView):
+    model = Bot
+    form_class = BotForm
+    template_name = 'bots/create_bot.html'
+    login_url = reverse_lazy('user_accounts:login')  
+
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        response = super().form_valid(form)
+        bot_id = self.object.id 
+        self.success_url = reverse('bots:bot_controller', args=[bot_id])
+        return response
+
+
+
+class BotControllerView(LoginRequiredMixin, DetailView):
+    model = Bot
+    template_name = 'bots/bot_controller.html'
+    context_object_name = 'bot'
+    login_url = reverse_lazy('user_accounts:login') 
+    redirect_field_name = 'bots/bots_list' 
+
+    def get_object(self):
+        bot = super().get_object()
+        if bot.owner != self.request.user:
+            raise PermissionDenied("You are not allowed to access this bot.")
+        return bot
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        bot_id = self.object.id
+        action = request.POST.get('action')
+        app_path = request.POST.get('app_path')
+        package_name = request.POST.get('package_name')
+
+        try:
+            if action == 'install':
+                stdout, stderr = install_app(self.object.emulator_id, app_path)
+            elif action == 'launch':
+                stdout, stderr = launch_app(self.object.emulator_id, package_name)
+            elif action == 'stop':
+                stdout, stderr = stop_app(self.object.emulator_id, package_name)
+            else:
+                return JsonResponse({"error": "Invalid action"}, status=400)
+
+            if stderr:
+                return JsonResponse({"error": stderr}, status=500)
+            return JsonResponse({"stdout": stdout}, status=200)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+
+
+4. Set up templates (templates/bot_controller.html):
+
+<iframe src="http://127.0.0.1:5555/bots/bot_controller/{{ bot.id }}/?emulator_id={{ bot.emulator_id }}" width="100%" height="600px"></iframe>
+                    <form method="post" class="mt-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="bot_id" value="{{ bot.id }}">
+                        <div class="form-group">
+                            <input type="text" name="app_path" class="form-control" placeholder="App Path">
+                        </div>
+                        <div class="form-group mt-2">
+                            <input type="text" name="package_name" class="form-control" placeholder="Package Name">
+                        </div>
+                        <div class="form-group mt-3">
+                            <button type="submit" name="action" value="install" class="btn btn-primary">Install App</button>
+                            <button type="submit" name="action" value="launch" class="btn btn-success">Launch App</button>
+                            <button type="submit" name="action" value="stop" class="btn btn-danger">Stop App</button>
+
+
+
+For a problem:
+When trying to connect to BlueStacks using ADB, I encounter several problems:
+
+ADB is not connecting to BlueStacks properly.
+The page inside the iframe displays nothing instead of Android.
+Problems with CSP and CORS settings cause the emulator to not load within the framework.
+
+
+ADB settings:
+
+adb connect 127.0.0.1:5555
+adb devices
+
+
+إعدادات CSP وCORS في settings.py:
+
+CORS_ORIGIN_ALLOW_ALL = False
+CORS_ORIGIN_WHITELIST = [
+    'http://127.0.0.1:5555',
+    'http://10.0.2.2:5555'
 ]
+CSP_DEFAULT_SRC = ["'self'"]
+CSP_STYLE_SRC = ["'self'", "'unsafe-inline'"]
+CSP_IMG_SRC = ["'self'", 'data:']
+CSP_SCRIPT_SRC = ["'self'", "'unsafe-inline'"]
+CSP_FRAME_SRC = ["'self'", 'http://127.0.0.1:5555', 'http://10.0.2.2:5555']
+CSP_FRAME_ANCESTORS = ["'self'", 'http://127.0.0.1:5555', 'http://10.0.2.2:5555']
+
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'ALLOW-FROM http://127.0.0.1:5555'
+
+
+Attempts to solve the problem:
+I made sure that ADB is working properly and BlueStacks is connected.
+I have updated the CSP and CORS settings to allow loading the emulator inside the framework.
+I tried to use different addresses in the frame (iframe) such as localhost and 127.0.0.1.
